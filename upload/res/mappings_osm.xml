@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+        "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+        
+<hibernate-mapping package="org.traffic.models.osm">
+
+    <class name="OSMLine" table="osmlines">
+     	<id name="id" column="id" />
+		<property name="way" type="org.hibernatespatial.GeometryUserType" />
+		<property name="highway" />
+		<property name="name" />
+		<property name="maxspeed" />
+    </class>
+    
+    <class name="OSMRoad" table="osmroads">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">roads_id_seq</param>
+			</generator>
+		</id> 
+		<property name="highway" />
+		<property name="name" />
+    	<property name="maxspeed" />
+    </class>
+    
+</hibernate-mapping>

@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+        "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping package="org.traffic.models.traffic">
+
+	<class name="Problem" table="problems">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">problems_id_seq</param>
+			</generator>
+		</id>
+		<property name="hour" />
+		<property name="description" />
+		<property name="regionJSON" />
+	</class>
+
+	<class name="Route" table="routes">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">routes_id_seq</param>
+			</generator>
+		</id>
+		<property name="route" type="org.hibernatespatial.GeometryUserType"
+			not-null="true" />
+		<property name="started" not-null="true" type="timestamp" />
+		<property name="updated" />
+		<property name="cloudmade" />
+		<one-to-one name="client" class="Client" property-ref="route" />
+	</class>
+
+	<!-- Class representing an average speed -->
+	<class name="SpeedToStart" table="speeds_to_start" mutable="false">
+		<cache usage="read-only" />
+		<id name="id" column="id" unsaved-value="null">
+			<generator class="assigned" />
+		</id>
+		<property name="category" />
+		<property name="speed" />
+		<many-to-one name="roadstrip" column="road_id" class="RoadStrip" />
+	</class>
+
+	<!-- Class representing an average speed -->
+	<class name="SpeedToEnd" table="speeds_to_end" mutable="false">
+		<cache usage="read-only" />
+		<id name="id" column="id" unsaved-value="null">
+			<generator class="assigned" />
+		</id>
+		<property name="category" />
+		<property name="speed" />
+		<many-to-one name="roadstrip" column="road_id" class="RoadStrip" />
+	</class>
+
+	<class name="Client" table="clients">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">clients_id_seq</param>
+			</generator>
+		</id>
+		<property name="hash" />
+		<property name="ack" />
+		<property name="lease" not-null="true" type="timestamp" />
+		<many-to-one name="route" class="Route" not-null="false"
+			cascade="all" unique="true" />
+	</class>
+
+	<!-- Class representing a road -->
+	<class name="Road" table="roads">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">routes_id_seq</param>
+			</generator>
+		</id>
+		<property name="name" />
+		<property name="highway" />
+		<property name="maxspeed" type="integer" />
+		<set name="strips" inverse="false" cascade="all">
+			<key column="road_id" />
+			<one-to-many class="RoadStrip" />
+		</set>
+		<property name="calculated" />
+	</class>
+
+	<!-- Class representing a single strip on a road -->
+	<class name="RoadStrip" table="roadstrips">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">strips_id_seq</param>
+			</generator>
+		</id>
+		<property name="way" type="org.hibernatespatial.GeometryUserType"
+			not-null="true" />
+		<many-to-one name="road" column="road_id" class="Road" />
+		<set name="temposToStart" inverse="true" cascade="none">
+			<key column="road_id" />
+			<one-to-many class="SpeedToStart" />
+		</set>
+		<set name="temposToEnd" inverse="true" cascade="none">
+			<key column="road_id" />
+			<one-to-many class="SpeedToEnd" />
+		</set>
+		<set name="congestions" inverse="true" cascade="none">
+			<key column="road_id" />
+			<one-to-many class="Congestion" />
+		</set>
+	</class>
+
+	<!-- Class representing the information of a single user-request -->
+	<class name="UserData" table="userdata">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">userdata_id_seq</param>
+			</generator>
+		</id>
+		<property name="time" not-null="true" type="timestamp" />
+		<property name="position" type="org.hibernatespatial.GeometryUserType"
+			not-null="true" />
+		<property name="speed" />
+		<property name="connectionhash" />
+		<property name="road_id" />
+		<property name="to_start" />
+		<property name="to_end" />
+	</class>
+
+
+
+	<!-- Class representing a congestion -->
+	<class name="Congestion" table="congestions">
+		<id name="id" column="id">
+			<generator class="sequence">
+				<param name="sequence">congestions_id_seq</param>
+			</generator>
+		</id>
+		<property name="type" />
+		<property name="position" type="org.hibernatespatial.GeometryUserType"
+			not-null="true" />
+		<property name="reportingtime" not-null="true" type="timestamp" />
+		<many-to-one name="roadstrip" column="road_id" class="RoadStrip" />
+	</class>
+
+	<!-- Function to get the road -->
+	<database-object>
+		<create>CREATE OR REPLACE FUNCTION data.getnearestroad() RETURNS
+			TRIGGER AS $$
+			DECLARE
+			road int4;
+			BEGIN
+			SELECT INTO road r.road_id
+			FROM
+			data.roadstrips r
+			WHERE st_dwithin(r.way,
+			GeomFromText('POINT(8.38688671588898
+			52.3282778263092)', 4326),
+			0.00015)
+			LIMIT 1;
+			NEW.road_id = road;
+			RETURN NEW;
+			END;
+			$$ language
+			'plpgsql';
+		</create>
+		<drop>DROP FUNCTION data.getnearestroad()</drop>
+		<dialect-scope name="org.hibernatespatial.postgis.PostgisDialect" />
+	</database-object>
+
+	<!-- Use the function in a trigger on table userdata -->
+	<database-object>
+		<create>CREATE TRIGGER getnearestroad_ AFTER INSERT
+			ON data.userdata
+			FOR EACH ROW EXECUTE PROCEDURE
+			data.getnearestroad();
+		</create>
+		<drop>DROP TRIGGER data.getnearestroad_;</drop>
+	</database-object>
+
+</hibernate-mapping>
